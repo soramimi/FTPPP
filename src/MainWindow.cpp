@@ -52,9 +52,9 @@ void MainWindow::on_pushButton_clicked()
 	QBuffer b;
 	if (b.open(QBuffer::WriteOnly)) {
 		ftplib ftp;
-		ftp.Connect("ftp.jaist.ac.jp");
-		ftp.Login("anonymous", "foo@example.com");
-		ftp.Dir(&b, "/pub/qtproject");
+		ftp.connect("ftp.jaist.ac.jp");
+		ftp.login("anonymous", "foo@example.com");
+		ftp.dir(&b, "/pub/qtproject");
 		ftp.Quit();
 	}
 	QStringList lines = splitLines(b.buffer(), [](char const *ptr, size_t len){
