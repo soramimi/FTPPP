@@ -163,7 +163,7 @@ public:
 	int negotiateEncryption();
 	void setCallbackCertFunction(FtpCallbackCert pointer);
 #endif
-    int Quit();
+    int quit();
 	void setCallbackIdleFunction(FtpCallbackIdle pointer);
 	void setCallbackLogFunction(FtpCallbackLog pointer);
 	void setCallbackXferFunction(FtpCallbackXfer pointer);

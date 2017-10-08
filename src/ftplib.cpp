@@ -616,7 +616,7 @@ int ftplib::ftpAccess(const char *path, accesstype type, transfermode mode, ftph
 		dir = FTPLIB_READ;
 		break;
 	case ftplib::DirVerbose:
-		strcpy(buf,"LIST -aL");
+		strcpy(buf,"LIST -alL");
 		dir = FTPLIB_READ;
 		break;
 	case ftplib::FileReadAppend:
@@ -1295,7 +1295,7 @@ int ftplib::remove(const char *path)
  *
  * return 1 if successful, 0 otherwise
  */
-int ftplib::Quit()
+int ftplib::quit()
 {
 	if (mp_ftphandle->dir != FTPLIB_CONTROL) return 0;
 	if (mp_ftphandle->handle == 0) {
