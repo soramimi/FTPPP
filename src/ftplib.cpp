@@ -82,6 +82,7 @@ struct ftplib::ftphandle {
 	int64_t cbbytes = 0;
 	int64_t xfered1 = 0;
 	char response[256];
+	std::vector<std::string> response2;
 #ifndef NOSSL
 	SSL *ssl = 0;
 	SSL_CTX* ctx = 0;
@@ -348,21 +349,27 @@ int ftplib::readresp(char c, ftphandle_ptr nControl)
 {
 	char match[5];
 	
-	if (readline(nControl->response,256,nControl) == -1) {
+	nControl->response2.clear();
+
+	if (readline(nControl->response, 256, nControl) == -1) {
 		perror("Control socket read failed");
 		return 0;
 	}
 	
 	if (nControl->response[3] == '-') {
-		strncpy(match,nControl->response,3);
+		strncpy(match,nControl->response, 3);
 		match[3] = ' ';
 		match[4] = '\0';
-		do {
-			if (readline(nControl->response,256,nControl) == -1) {
+		while (1) {
+			if (readline(nControl->response, 256, nControl) == -1) {
 				perror("Control socket read failed");
 				return 0;
 			}
-		} while (strncmp(nControl->response,match,4));
+			if (strncmp(nControl->response, match, 4) == 0) {
+				break;
+			}
+			nControl->response2.push_back(nControl->response);
+		}
 	}
 	if (nControl->response[0] == c) return 1;
 	return 0;
@@ -610,13 +617,24 @@ int ftplib::ftpAccess(const char *path, accesstype type, transfermode mode, ftph
 	sprintf(buf, "TYPE %c", mode);
 	if (!ftpSendCmd(buf, '2', nControl)) return 0;
 
+	char resp = '1';
+
 	switch (type) {
+	case ftplib::Feat:
+		strcpy(buf,"FEAT");
+		dir = FTPLIB_READ;
+		resp = '2';
+		break;
 	case ftplib::Dir:
 		strcpy(buf,"NLST");
 		dir = FTPLIB_READ;
 		break;
 	case ftplib::DirVerbose:
 		strcpy(buf,"LIST -alL");
+		dir = FTPLIB_READ;
+		break;
+	case ftplib::MLSD:
+		strcpy(buf,"MLSD");
 		dir = FTPLIB_READ;
 		break;
 	case ftplib::FileReadAppend:
@@ -641,13 +659,13 @@ int ftplib::ftpAccess(const char *path, accesstype type, transfermode mode, ftph
 	}
 
 	if (nControl->cmode == ftplib::pasv) {
-		if (ftpOpenPasv(nControl, nData, mode, dir, buf) == -1) return 0;
+		if (ftpOpenPasv(nControl, nData, mode, dir, buf, resp) == -1) return 0;
 	}
 
 	if (nControl->cmode == ftplib::port) {
 		if (ftpOpenPort(nControl, nData, mode, dir, buf) == -1) return 0;
 		if (!ftpAcceptConnection(*nData,nControl)) {
-			ftpClose(*nData);
+			ftpClose(*nData, '2');
 			*nData = nullptr;
 			return 0;
 		}
@@ -756,7 +774,7 @@ int ftplib::ftpOpenPort(ftphandle_ptr nControl, ftphandle_ptr *nData, transfermo
 	}
 
 	if (!ftpSendCmd(cmd, '1', nControl)) {
-		ftpClose(*nData);
+		ftpClose(*nData, '2');
 		*nData = nullptr;
 		return -1;
 	}
@@ -789,7 +807,7 @@ int ftplib::ftpOpenPort(ftphandle_ptr nControl, ftphandle_ptr *nData, transfermo
  *
  * return 1 if successful, -1 otherwise
  */
-int ftplib::ftpOpenPasv(ftphandle_ptr nControl, ftphandle_ptr *nData, transfermode mode, int dir, char *cmd)
+int ftplib::ftpOpenPasv(ftphandle_ptr nControl, ftphandle_ptr *nData, transfermode mode, int dir, char *cmd, char resp)
 {
 	int sData;
 	union {
@@ -817,7 +835,7 @@ int ftplib::ftpOpenPasv(ftphandle_ptr nControl, ftphandle_ptr *nData, transfermo
 
 	memset(&sin, 0, l);
 	sin.in.sin_family = AF_INET;
-	if (!ftpSendCmd("PASV",'2',nControl)) return -1;
+	if (!ftpSendCmd("PASV", '2', nControl)) return -1;
 	cp = strchr(nControl->response,'(');
 	if (!cp) return -1;
 	cp++;
@@ -841,7 +859,7 @@ int ftplib::ftpOpenPasv(ftphandle_ptr nControl, ftphandle_ptr *nData, transfermo
 	if (mp_ftphandle->offset != 0) {
 		char buf[256];
 		sprintf(buf,"REST %lld",mp_ftphandle->offset);
-		if (!ftpSendCmd(buf,'3',nControl)) return 0;
+		if (!ftpSendCmd(buf, '3', nControl)) return 0;
 	}
 
 	sData = socket(PF_INET,SOCK_STREAM,IPPROTO_TCP);
@@ -863,8 +881,11 @@ int ftplib::ftpOpenPasv(ftphandle_ptr nControl, ftphandle_ptr *nData, transfermo
 	if (nControl->dir != FTPLIB_CONTROL) return -1;
 	sprintf(cmd,"%s\r\n",cmd);
 #ifndef NOSSL
-	if (nControl->tlsctrl) ret = SSL_write(nControl->ssl, cmd, strlen(cmd));
-	else ret = net_write(nControl->handle, cmd, strlen(cmd));
+	if (nControl->tlsctrl) {
+		ret = SSL_write(nControl->ssl, cmd, strlen(cmd));
+	} else {
+		ret = net_write(nControl->handle, cmd, strlen(cmd));
+	}
 #else
 	ret = net_write(nControl->handle,cmd,strlen(cmd));
 #endif
@@ -878,7 +899,7 @@ int ftplib::ftpOpenPasv(ftphandle_ptr nControl, ftphandle_ptr *nData, transfermo
 		net_close(sData);
 		return -1;
 	}
-	if (!readresp('1', nControl)) {
+	if (!readresp(resp, nControl)) {
 		net_close(sData);
 		return -1;
 	}
@@ -912,7 +933,7 @@ int ftplib::ftpOpenPasv(ftphandle_ptr nControl, ftphandle_ptr *nData, transfermo
 /*
  * FtpClose - close a data connection
  */
-int ftplib::ftpClose(ftphandle_ptr nData)
+int ftplib::ftpClose(ftphandle_ptr nData, char resp)
 {
 	ftphandle_ptr ctrl;
 
@@ -932,7 +953,7 @@ int ftplib::ftpClose(ftphandle_ptr nData)
 	SSL_free(nData->ssl);
 #endif
 //	free(nData);
-	if (ctrl) return readresp('2', ctrl);
+	if (ctrl && resp != 0) return readresp(resp, ctrl);
 	return 1;
 }
 
@@ -1141,7 +1162,15 @@ int ftplib::ftpXfer(QIODevice *io, const char *path, ftphandle_ptr nControl, acc
 	if (ftpAccess(path, type, mode, nControl, &nData) == 0) return 0;
 
 	std::vector<char> dbuf(FTPLIB_BUFSIZ);
-	if ((type == ftplib::FileWrite) || (type == ftplib::FileWriteAppend)) {
+
+	char resp = '2';
+
+	if (type == ftplib::Feat) {
+		for (std::string const s : nControl->response2) {
+			io->write(s.c_str(), s.size());
+		}
+		resp = 0;
+	} else if (type == ftplib::FileWrite || type == ftplib::FileWriteAppend) {
 		while (1) {
 			int l = io->read(&dbuf[0], dbuf.size());
 			if (l < 1) break;
@@ -1161,7 +1190,7 @@ int ftplib::ftpXfer(QIODevice *io, const char *path, ftphandle_ptr nControl, acc
 			}
 		}
 	}
-	return ftpClose(nData);
+	return ftpClose(nData, resp);
 }
 
 /*
@@ -1184,6 +1213,22 @@ int ftplib::dir(QIODevice *outputfile, const char *path)
 {
 	mp_ftphandle->offset = 0;
 	return ftpXfer(outputfile, path, mp_ftphandle, ftplib::DirVerbose, ftplib::Ascii);
+}
+
+int ftplib::mlsd(QIODevice *outputfile, const char *path)
+{
+	mp_ftphandle->offset = 0;
+	return ftpXfer(outputfile, path, mp_ftphandle, ftplib::MLSD, ftplib::Ascii);
+}
+
+/*
+ *
+ * return 1 if successful, 0 otherwise
+ */
+int ftplib::feat(QIODevice *outputfile)
+{
+	mp_ftphandle->offset = 0;
+	return ftpXfer(outputfile, nullptr, mp_ftphandle, ftplib::Feat, ftplib::Ascii);
 }
 
 /*
@@ -1293,21 +1338,19 @@ int ftplib::remove(const char *path)
 /*
  * FtpQuit - disconnect from remote
  *
- * return 1 if successful, 0 otherwise
  */
-int ftplib::quit()
+void ftplib::quit()
 {
-	if (mp_ftphandle->dir != FTPLIB_CONTROL) return 0;
-	if (mp_ftphandle->handle == 0) {
-		strcpy(mp_ftphandle->response, "error: no anwser from server\n");
-		return 0;
-	}
-	if (!ftpSendCmd("QUIT", '2', mp_ftphandle)) {
-		net_close(mp_ftphandle->handle);
-		return 0;
-	} else {
-		net_close(mp_ftphandle->handle);
-		return 1;
+	if (mp_ftphandle->dir == FTPLIB_CONTROL) {
+		if (mp_ftphandle->handle != 0) {
+			if (!ftpSendCmd("QUIT", '2', mp_ftphandle)) {
+				net_close(mp_ftphandle->handle);
+			} else {
+				net_close(mp_ftphandle->handle);
+				mp_ftphandle->handle = 0;
+			}
+			mp_ftphandle->handle = 0;
+		}
 	}
 }
 
@@ -1578,7 +1621,7 @@ ftplib::ftphandle_ptr ftplib::rawOpen(const char *path, accesstype type, transfe
 
 int ftplib::rawClose(ftphandle_ptr handle)
 {
-	return ftpClose(handle);
+	return ftpClose(handle, '2');
 } 
 
 int ftplib::rawWrite(void *buf, int len, ftphandle_ptr handle)

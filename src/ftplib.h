@@ -88,8 +88,10 @@ private:
 public:
 
 	enum accesstype {
-		Dir = 1,
+		Feat = 1,
+		Dir,
 		DirVerbose,
+		MLSD,
 		FileRead,
 		FileWrite,
 		FileReadAppend,
@@ -120,14 +122,14 @@ private:
 	ftphandle_ptr mp_ftphandle;
 
 	int ftpXfer(QIODevice *io, const char *path, ftphandle_ptr nControl, accesstype type, transfermode mode);
-	int ftpOpenPasv(ftphandle_ptr nControl, ftphandle_ptr *nData, transfermode mode, int dir, char *cmd);
+	int ftpOpenPasv(ftphandle_ptr nControl, ftphandle_ptr *nData, transfermode mode, int dir, char *cmd, char resp);
 	int ftpSendCmd(const char *cmd, char expresp, ftphandle_ptr nControl);
 	int ftpAcceptConnection(ftphandle_ptr nData, ftphandle_ptr nControl);
 	int ftpOpenPort(ftphandle_ptr nControl, ftphandle_ptr *nData, transfermode mode, int dir, char *cmd);
 	int ftpRead(void *buf, int max, ftphandle_ptr nData);
 	int ftpWrite(void *buf, int len, ftphandle_ptr nData);
 	int ftpAccess(const char *path, accesstype type, transfermode mode, ftphandle_ptr nControl, ftphandle_ptr *nData);
-	int ftpClose(ftphandle_ptr nData);
+	int ftpClose(ftphandle_ptr nData, char resp);
 
 	int socket_wait(ftphandle_ptr ctl);
 	int readline(char *buf,int max,ftphandle_ptr ctl);
@@ -163,7 +165,7 @@ public:
 	int negotiateEncryption();
 	void setCallbackCertFunction(FtpCallbackCert pointer);
 #endif
-    int quit();
+	void quit();
 	void setCallbackIdleFunction(FtpCallbackIdle pointer);
 	void setCallbackLogFunction(FtpCallbackLog pointer);
 	void setCallbackXferFunction(FtpCallbackXfer pointer);
@@ -178,6 +180,8 @@ public:
 	int rawClose(ftphandle_ptr handle);
 	int rawWrite(void* buf, int len, ftphandle_ptr handle);
 	int rawRead(void* buf, int max, ftphandle_ptr handle);
+	int feat(QIODevice *outputfile);
+	int mlsd(QIODevice *outputfile, const char *path);
 };
 
 #endif

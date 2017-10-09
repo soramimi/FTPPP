@@ -6,16 +6,23 @@
 #include <QDateTime>
 #include <QDebug>
 #include <QFileInfo>
+#include <set>
 
-MainWindow::MainWindow(QWidget *parent) :
-	QMainWindow(parent),
-	ui(new Ui::MainWindow)
+struct MainWindow::Private {
+	std::set<QString> feat;
+};
+
+MainWindow::MainWindow(QWidget *parent)
+	: QMainWindow(parent)
+	, ui(new Ui::MainWindow)
+	, m(new Private)
 {
 	ui->setupUi(this);
 }
 
 MainWindow::~MainWindow()
 {
+	delete m;
 	delete ui;
 }
 
@@ -181,28 +188,147 @@ public:
 	}
 };
 
-void MainWindow::on_pushButton_clicked()
+ftp_ptr MainWindow::connectFTP()
 {
+	ftp_ptr ftp = ftp_ptr(new ftplib);
+	ftp->connect("ftp.jaist.ac.jp");
+	ftp->login("anonymous", "foo@example.com");
+	return ftp;
+}
+
+void MainWindow::updateFeature()
+{
+	m->feat.clear();
+
 	QBuffer b;
 	if (b.open(QBuffer::WriteOnly)) {
-		ftplib ftp;
-		ftp.connect("ftp.jaist.ac.jp");
-		ftp.login("anonymous", "foo@example.com");
-		ftp.dir(&b, "/pub/qtproject");
-		ftp.quit();
+		ftp_ptr ftp = connectFTP();
+		ftp->feat(&b);
+		ftp->quit();
 	}
 	QStringList lines = splitLines(b.buffer(), [](char const *ptr, size_t len){
-		return QString::fromUtf8(ptr, len);
+		return QString::fromUtf8(ptr, len).trimmed();
 	});
-
-	QList<FileItem> files;
-	for (int row = 0; row < lines.size(); row++) {
-		QString const &line = lines[row];
-		FileItem t;
-		if (t.parseList(line)) {
-			files.push_back(t);
+	for (QString const &line : lines) {
+		QString s = line;
+		int i = s.indexOf(' ');
+		if (i >= 0) {
+			s = s.mid(0, i);
+		}
+		if (!s.isEmpty()) {
+			m->feat.insert(s);
+			qDebug() << s;
 		}
 	}
+}
+
+bool MainWindow::queryFeatureAvailable(QString const &name)
+{
+	auto it = m->feat.find(name);
+	return it != m->feat.end();
+}
+
+void MainWindow::fetchList()
+{
+	updateFeature();
+
+	bool mlsd = queryFeatureAvailable("MLST") || queryFeatureAvailable("MLSD");
+
+	QBuffer b;
+	if (b.open(QBuffer::WriteOnly)) {
+		ftp_ptr ftp = connectFTP();
+		if (mlsd) {
+			ftp->mlsd(&b, "/");
+		} else {
+			ftp->dir(&b, "/");
+		}
+		ftp->quit();
+	}
+
+	QList<FileItem> files;
+
+	if (mlsd) {
+		QByteArray ba = b.buffer();
+		if (!ba.isEmpty()) {
+			std::vector<std::string> list;
+			char const *begin = ba.data();
+			char const *end = begin + ba.size();
+			char const *left = begin;
+			char const *ptr = begin;
+			while (1) {
+				int c = 0;
+				if (ptr < end) {
+					c = *ptr & 0xff;
+				}
+				if (c == 0 || c == ';' || c == '\n' || c == '\r') {
+					if (left < ptr) {
+						std::string s(left, ptr - left);
+						list.push_back(s);
+					}
+					if (c != ';') {
+						int n = (int)list.size();
+						if (n > 0) {
+							FileItem item;
+							n--;
+							char const *p = list[n].c_str();
+							if (*p == ' ') {
+								item.name = p + 1;
+							}
+							if (!item.name.isEmpty() && item.name != ".") {
+								for (int i = 0; i < n; i++) {
+									char const *k = list[i].c_str();
+									char const *eq = strchr(k, '=');
+									if (eq) {
+										std::string key(k, eq - k);
+										std::string val(eq + 1);
+										if (key == "modify") {
+											int year, month, day, hour, minute;
+											if (sscanf(val.c_str(), "%04u%02u%02u%02u%02u", &year, &month, &day, &hour, &minute) == 5) {
+												item.datetime = QDateTime(QDate(year, month, day), QTime(hour, minute, 0));
+											}
+										} else if (key == "type") {
+											item.isdir = (val == "dir" || val == "pdir");
+										} else if (key == "size") {
+											item.size = strtoull(val.c_str(), 0, 10);
+										} else if (key == "UNIX.mode") {
+											item.attr = strtoul(val.c_str(), 0, 8);
+										} else if (key == "UNIX.owner") {
+											item.owner = QString::fromStdString(val);
+										}
+									}
+								}
+								files.push_back(item);
+							}
+						}
+						list.clear();
+					}
+					if (c == 0) break;
+					ptr++;
+					left = ptr;
+				} else {
+					ptr++;
+				}
+			}
+		}
+	} else {
+		QStringList lines = splitLines(b.buffer(), [](char const *ptr, size_t len){
+			return QString::fromUtf8(ptr, len);
+		});
+		for (int row = 0; row < lines.size(); row++) {
+			QString const &line = lines[row];
+			FileItem t;
+			if (t.parseList(line)) {
+				files.push_back(t);
+			}
+		}
+	}
+
+	std::sort(files.begin(), files.end(), [](FileItem const &a, FileItem const &b){
+		if (a.isdir && !b.isdir) return true;
+		if (!a.isdir && b.isdir) return false;
+		return a.name.compare(b.name, Qt::CaseInsensitive) < 0;
+	});
+
 
 	QStringList cols = {
 		tr("Name"),
@@ -248,4 +374,9 @@ void MainWindow::on_pushButton_clicked()
 		AddColumn(t.owner, false);
 	}
 	ui->tableWidget_remote->resizeColumnsToContents();
+}
+
+void MainWindow::on_pushButton_clicked()
+{
+	fetchList();
 }
