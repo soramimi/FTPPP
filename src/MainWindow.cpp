@@ -407,11 +407,13 @@ void MainWindow::updateTreeView(QString const &path, QStringList const *children
 				goto next;
 			}
 		}
-		QTreeWidgetItem *newitem = new QTreeWidgetItem();
-		newitem->setText(0, list[i]);
-		newitem->setData(0, Item_Path, s / list[i]);
-		item->addChild(newitem);
-		item = newitem;
+		{
+			QTreeWidgetItem *newitem = new QTreeWidgetItem();
+			newitem->setText(0, list[i]);
+			newitem->setData(0, Item_Path, s / list[i]);
+			item->addChild(newitem);
+			item = newitem;
+		}
 next:;
 		s = s / list[i];
 	}
