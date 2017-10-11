@@ -1,6 +1,5 @@
 #include "MainWindow.h"
 #include "ui_MainWindow.h"
-#include "ftplib.h"
 #include <functional>
 #include <QBuffer>
 #include <QDateTime>
@@ -8,6 +7,9 @@
 #include <QFileInfo>
 #include <set>
 #include "joinpath.h"
+
+
+
 
 class FileItem;
 typedef QList<FileItem> FileItemList;
@@ -20,6 +22,7 @@ struct MainWindow::Private {
 	std::set<QString> feat;
 	std::map<QString, FileItemList> filesmap;
 	QString current_path;
+	FTP ftp;
 };
 
 MainWindow::MainWindow(QWidget *parent)
@@ -28,10 +31,12 @@ MainWindow::MainWindow(QWidget *parent)
 	, m(new Private)
 {
 	ui->setupUi(this);
+	ui->splitter->setSizes({100,300});
 }
 
 MainWindow::~MainWindow()
 {
+	m->ftp.close();
 	delete m;
 	delete ui;
 }
@@ -71,6 +76,7 @@ class FileItem {
 public:
 	QString name;
 	bool isdir = false;
+	QString symlink;
 	QDateTime datetime;
 	uint64_t size;
 	QString type;
@@ -198,34 +204,18 @@ public:
 	}
 };
 
-ftp_ptr MainWindow::connectFTP()
+FTP &MainWindow::ftp()
 {
-	QString server = "ftp.jaist.ac.jp";
-	ftp_ptr ftp = ftp_ptr(new ftplib);
-	ftp->connect(server.toStdString().c_str());
-	ftp->login("anonymous", "foo@example.com");
-
-	updateFeature(ftp);
-
-	if (ui->treeWidget->topLevelItemCount() == 0) {
-		ui->treeWidget->clear();
-		QTreeWidgetItem *item = new QTreeWidgetItem();
-		item->setText(0, server);
-		ui->treeWidget->addTopLevelItem(item);
-	}
-
-	return ftp;
+	return m->ftp;
 }
 
-void MainWindow::updateFeature(ftp_ptr ftp)
+void MainWindow::updateFeature()
 {
 	m->feat.clear();
 
 	QBuffer b;
 	if (b.open(QBuffer::WriteOnly)) {
-//		ftp_ptr ftp = connectFTP();
-		ftp->feat(&b);
-//		ftp->quit();
+		ftp().feat(&b);
 	}
 	QStringList lines = splitLines(b.buffer(), [](char const *ptr, size_t len){
 		return QString::fromUtf8(ptr, len).trimmed();
@@ -238,7 +228,7 @@ void MainWindow::updateFeature(ftp_ptr ftp)
 		}
 		if (!s.isEmpty()) {
 			m->feat.insert(s);
-			qDebug() << s;
+//			qDebug() << s;
 		}
 	}
 }
@@ -255,14 +245,12 @@ void MainWindow::fetchList(QString const &path)
 
 	QBuffer b;
 	if (b.open(QBuffer::WriteOnly)) {
-		ftp_ptr ftp = connectFTP();
 		std::string d = path.toStdString();
 		if (mlsd) {
-			ftp->mlsd(&b, d.c_str());
+			ftp().mlsd(&b, d.c_str());
 		} else {
-			ftp->dir(&b, d.c_str());
+			ftp().dir(&b, d.c_str());
 		}
-		ftp->quit();
 	}
 
 	QList<FileItem> files;
@@ -338,7 +326,16 @@ void MainWindow::fetchList(QString const &path)
 			QString const &line = lines[row];
 			FileItem item;
 			if (item.parseList(line) && item.name != "." && item.name != "..") {
-				files.push_back(item);
+				int i = item.name.indexOf(" -> ");
+				if (i == 0) {
+					// skip
+				} else {
+					if (i > 0) {
+						item.symlink = item.name.mid(i + 4);
+						item.name = item.name.mid(0, i);
+					}
+					files.push_back(item);
+				}
 			}
 		}
 	}
@@ -433,7 +430,6 @@ void MainWindow::updateFilesView(QString const &path)
 		tr("Owner"),
 	};
 
-
 	ui->tableWidget->clear();
 	ui->tableWidget->setColumnCount(cols.size());
 	ui->tableWidget->setRowCount(files.size());
@@ -487,11 +483,6 @@ void MainWindow::changeDir(QString const path)
 	}
 }
 
-void MainWindow::on_pushButton_clicked()
-{
-	fetchList("/");
-}
-
 void MainWindow::on_tableWidget_itemDoubleClicked(QTableWidgetItem *)
 {
 	int row = ui->tableWidget->currentRow();
@@ -517,3 +508,33 @@ void MainWindow::on_treeWidget_itemExpanded(QTreeWidgetItem *item)
 		changeDir(path);
 	}
 }
+
+bool MainWindow::connect_()
+{
+	QString server = "ftp.jaist.ac.jp";
+	QString user = "anonymous";
+	QString pass = "who@example.com";
+
+	ftp().close();
+
+	if (!ftp().open(server, user, pass)) return false;
+
+	updateFeature();
+
+	if (ui->treeWidget->topLevelItemCount() == 0) {
+		ui->treeWidget->clear();
+		QTreeWidgetItem *item = new QTreeWidgetItem();
+		item->setText(0, server);
+		ui->treeWidget->addTopLevelItem(item);
+	}
+
+	return  true;
+}
+
+void MainWindow::on_pushButton_clicked()
+{
+	if (connect_()) {
+		fetchList("/");
+	}
+}
+

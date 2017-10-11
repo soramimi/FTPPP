@@ -3,6 +3,7 @@
 
 #include <QMainWindow>
 #include <memory>
+#include "FTP.h"
 
 namespace Ui {
 class MainWindow;
@@ -11,9 +12,7 @@ class MainWindow;
 class QTableWidgetItem;
 class QTreeWidgetItem;
 
-class ftplib;
 
-typedef std::shared_ptr<ftplib> ftp_ptr;
 
 class MainWindow : public QMainWindow
 {
@@ -27,11 +26,12 @@ private:
 	void fetchList(const QString &path);
 
 	bool queryFeatureAvailable(const QString &name);
-	void updateFeature(ftp_ptr ftp);
-	ftp_ptr connectFTP();
+	void updateFeature();
+	bool connect_();
 	void updateFilesView(const QString &path);
 	void updateTreeView(const QString &path, const QStringList *children);
 	void changeDir(const QString path);
+	FTP &ftp();
 public:
 	explicit MainWindow(QWidget *parent = 0);
 	~MainWindow();

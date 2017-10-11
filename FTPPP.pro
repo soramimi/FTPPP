@@ -21,11 +21,13 @@ SOURCES += src/main.cpp\
 		src/MainWindow.cpp \
 		src/ftplib.cpp \
     src/joinpath.cpp \
-    src/LegacyWindowsStyleTreeControl.cpp
+    src/LegacyWindowsStyleTreeControl.cpp \
+    src/FTP.cpp
 
 HEADERS  += src/MainWindow.h \
 		src/ftplib.h \
     src/joinpath.h \
-    src/LegacyWindowsStyleTreeControl.h
+    src/LegacyWindowsStyleTreeControl.h \
+    src/FTP.h
 
 FORMS    += src/MainWindow.ui
