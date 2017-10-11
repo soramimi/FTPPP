@@ -22,6 +22,7 @@ public:
 	bool dir(QIODevice *outputfile, const char *path);
 	bool mlsd(QIODevice *outputfile, const char *path);
 	void quit();
+	std::string pwd();
 };
 
 #endif // FTP_H

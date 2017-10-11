@@ -88,8 +88,7 @@ private:
 public:
 
 	enum accesstype {
-		Feat = 1,
-		Dir,
+		Dir = 1,
 		DirVerbose,
 		MLSD,
 		FileRead,
@@ -129,7 +128,7 @@ private:
 	int ftpRead(void *buf, int max, ftphandle_ptr nData);
 	int ftpWrite(void *buf, int len, ftphandle_ptr nData);
 	int ftpAccess(const char *path, accesstype type, transfermode mode, ftphandle_ptr nControl, ftphandle_ptr *nData);
-	int ftpClose(ftphandle_ptr nData, char resp);
+	int ftpClose(ftphandle_ptr nData);
 
 	int socket_wait(ftphandle_ptr ctl);
 	int readline(char *buf,int max,ftphandle_ptr ctl);
@@ -151,7 +150,7 @@ public:
 	int chdir(const char *path);
 	int cdup();
 	int rmdir(const char *path);
-	int pwd(char *path, int max);
+	string pwd();
 	int nlst(QIODevice *outputfile, const char *path);
 	int dir(QIODevice *outputfile, const char *path);
 	int size(const char *path, int *size, transfermode mode);

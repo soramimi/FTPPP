@@ -22,6 +22,8 @@ enum ItemRole {
 };
 
 struct MainWindow::Private {
+	int timer_counter = 0;
+	int ftp_refresh_counter = 0;
 	std::set<QString> feat;
 	std::map<QString, FileItemList> filesmap;
 	QString current_path;
@@ -50,6 +52,8 @@ MainWindow::MainWindow(QWidget *parent)
 			setWindowState(state);
 		}
 	}
+
+	startTimer(10);
 }
 
 MainWindow::~MainWindow()
@@ -387,7 +391,7 @@ void MainWindow::updateTreeView(QString const &path, QStringList const *children
 		list[0] = "/";
 	}
 
-	QTreeWidgetItem *item = ui->treeWidget->topLevelItem(0);
+	QTreeWidgetItem *item = ui->treeWidget_remote->topLevelItem(0);
 	if (!item) return;
 
 	QString s;
@@ -429,9 +433,10 @@ next:;
 		}
 	}
 
-	ui->treeWidget->blockSignals(true);
-	ui->treeWidget->setCurrentItem(item);
-	ui->treeWidget->blockSignals(false);
+	ui->treeWidget_remote->blockSignals(true);
+	ui->treeWidget_remote->setCurrentItem(item);
+	item->setExpanded(true);
+	ui->treeWidget_remote->blockSignals(false);
 }
 
 void MainWindow::updateFilesView(QString const &path)
@@ -450,21 +455,21 @@ void MainWindow::updateFilesView(QString const &path)
 		tr("Owner"),
 	};
 
-	ui->tableWidget->clear();
-	ui->tableWidget->setColumnCount(cols.size());
-	ui->tableWidget->setRowCount(files.size());
-	ui->tableWidget->setShowGrid(false);
-	ui->tableWidget->horizontalHeader()->setStretchLastSection(true);
-	ui->tableWidget->verticalHeader()->setVisible(false);
+	ui->tableWidget_remote->clear();
+	ui->tableWidget_remote->setColumnCount(cols.size());
+	ui->tableWidget_remote->setRowCount(files.size());
+	ui->tableWidget_remote->setShowGrid(false);
+	ui->tableWidget_remote->horizontalHeader()->setStretchLastSection(true);
+	ui->tableWidget_remote->verticalHeader()->setVisible(false);
 
 	for (int col = 0; col < cols.size(); col++) {
 		QTableWidgetItem *item = new QTableWidgetItem();
 		item->setText(cols[col]);
-		ui->tableWidget->setHorizontalHeaderItem(col, item);
+		ui->tableWidget_remote->setHorizontalHeaderItem(col, item);
 	}
 
 	for (int row = 0; row < files.size(); row++) {
-		ui->tableWidget->setRowHeight(row, 20);
+		ui->tableWidget_remote->setRowHeight(row, 20);
 		FileItem const &t = files[row];
 		int col = 0;
 		auto AddColumn = [&](QString const &text, bool alignright){
@@ -476,7 +481,7 @@ void MainWindow::updateFilesView(QString const &path)
 			if (col == 0) {
 				item->setData(Item_Path, path / text);
 			}
-			ui->tableWidget->setItem(row, col, item);
+			ui->tableWidget_remote->setItem(row, col, item);
 			col++;
 		};
 		AddColumn(t.name, false);
@@ -486,7 +491,7 @@ void MainWindow::updateFilesView(QString const &path)
 		AddColumn(t.attrString(), false);
 		AddColumn(t.owner, false);
 	}
-	ui->tableWidget->resizeColumnsToContents();
+	ui->tableWidget_remote->resizeColumnsToContents();
 }
 
 void MainWindow::changeDir(QString const path)
@@ -503,16 +508,16 @@ void MainWindow::changeDir(QString const path)
 	}
 }
 
-void MainWindow::on_tableWidget_itemDoubleClicked(QTableWidgetItem *)
+void MainWindow::on_tableWidget_remote_itemDoubleClicked(QTableWidgetItem *)
 {
-	int row = ui->tableWidget->currentRow();
-	QTableWidgetItem *item = ui->tableWidget->item(row, 0);
+	int row = ui->tableWidget_remote->currentRow();
+	QTableWidgetItem *item = ui->tableWidget_remote->item(row, 0);
 	if (!item) return;
 	QString path = item->data(Item_Path).toString();
 	fetchList(path);
 }
 
-void MainWindow::on_treeWidget_currentItemChanged(QTreeWidgetItem *current, QTreeWidgetItem *previous)
+void MainWindow::on_treeWidget_remote_currentItemChanged(QTreeWidgetItem *current, QTreeWidgetItem *previous)
 {
 	if (!current) return;
 
@@ -521,7 +526,7 @@ void MainWindow::on_treeWidget_currentItemChanged(QTreeWidgetItem *current, QTre
 	changeDir(path);
 }
 
-void MainWindow::on_treeWidget_itemExpanded(QTreeWidgetItem *item)
+void MainWindow::on_treeWidget_remote_itemExpanded(QTreeWidgetItem *item)
 {
 	if (item && item->isExpanded()) {
 		QString path = item->data(0, Item_Path).toString();
@@ -541,11 +546,11 @@ bool MainWindow::connect_()
 
 	updateFeature();
 
-	if (ui->treeWidget->topLevelItemCount() == 0) {
-		ui->treeWidget->clear();
+	if (ui->treeWidget_remote->topLevelItemCount() == 0) {
+		ui->treeWidget_remote->clear();
 		QTreeWidgetItem *item = new QTreeWidgetItem();
 		item->setText(0, server);
-		ui->treeWidget->addTopLevelItem(item);
+		ui->treeWidget_remote->addTopLevelItem(item);
 	}
 
 	return  true;
@@ -587,3 +592,18 @@ void MainWindow::closeEvent(QCloseEvent *event)
 	}
 	QMainWindow::closeEvent(event);
 }
+
+void MainWindow::timerEvent(QTimerEvent *event)
+{
+	m->timer_counter++;
+	if (m->timer_counter >= 100) {
+		m->timer_counter = 0;
+
+		m->ftp_refresh_counter++;
+		if (m->ftp_refresh_counter >= 30) {
+			m->ftp_refresh_counter = 0;
+			ftp().pwd();
+		}
+	}
+}
+

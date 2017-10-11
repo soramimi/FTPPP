@@ -30,6 +30,11 @@ bool FTP::feat(QIODevice *outputfile)
 	return ptr ? ptr->feat(outputfile) : false;
 }
 
+std::string FTP::pwd()
+{
+	return ptr ? ptr->pwd() : std::string();
+}
+
 bool FTP::dir(QIODevice *outputfile, const char *path)
 {
 	return ptr ? ptr->dir(outputfile, path) : false;

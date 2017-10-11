@@ -39,14 +39,18 @@ public:
 private slots:
 	void on_pushButton_clicked();
 
-	void on_tableWidget_itemDoubleClicked(QTableWidgetItem *item);
-	void on_treeWidget_currentItemChanged(QTreeWidgetItem *current, QTreeWidgetItem *previous);
-	void on_treeWidget_itemExpanded(QTreeWidgetItem *item);
+	void on_tableWidget_remote_itemDoubleClicked(QTableWidgetItem *item);
+	void on_treeWidget_remote_currentItemChanged(QTreeWidgetItem *current, QTreeWidgetItem *previous);
+	void on_treeWidget_remote_itemExpanded(QTreeWidgetItem *item);
 	void on_action_settings_triggered();
 
 	// QWidget interface
 protected:
 	void closeEvent(QCloseEvent *event);
+
+	// QObject interface
+protected:
+	void timerEvent(QTimerEvent *event);
 };
 
 #endif // MAINWINDOW_H
