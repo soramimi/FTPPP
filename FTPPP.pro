@@ -19,9 +19,11 @@ win32:LIBS += -LC:\openssl\lib -llibeay32 -lssleay32 -lws2_32
 
 SOURCES += src/main.cpp\
 		src/MainWindow.cpp \
-		src/ftplib.cpp
+		src/ftplib.cpp \
+    src/joinpath.cpp
 
 HEADERS  += src/MainWindow.h \
-		src/ftplib.h
+		src/ftplib.h \
+    src/joinpath.h
 
 FORMS    += src/MainWindow.ui

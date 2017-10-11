@@ -8,6 +8,9 @@ namespace Ui {
 class MainWindow;
 }
 
+class QTableWidgetItem;
+class QTreeWidgetItem;
+
 class ftplib;
 
 typedef std::shared_ptr<ftplib> ftp_ptr;
@@ -21,11 +24,14 @@ private:
 	struct Private;
 	Private *m;
 
-	void fetchList();
+	void fetchList(const QString &path);
 
 	bool queryFeatureAvailable(const QString &name);
-	void updateFeature();
+	void updateFeature(ftp_ptr ftp);
 	ftp_ptr connectFTP();
+	void updateFilesView(const QString &path);
+	void updateTreeView(const QString &path);
+	void changeDir(const QString path);
 public:
 	explicit MainWindow(QWidget *parent = 0);
 	~MainWindow();
@@ -33,6 +39,8 @@ public:
 private slots:
 	void on_pushButton_clicked();
 
+	void on_tableWidget_itemDoubleClicked(QTableWidgetItem *item);
+	void on_treeWidget_currentItemChanged(QTreeWidgetItem *current, QTreeWidgetItem *previous);
 };
 
 #endif // MAINWINDOW_H

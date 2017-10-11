@@ -7,9 +7,19 @@
 #include <QDebug>
 #include <QFileInfo>
 #include <set>
+#include "joinpath.h"
+
+class FileItem;
+typedef QList<FileItem> FileItemList;
+
+enum ItemRole {
+	Item_Path = Qt::UserRole,
+};
 
 struct MainWindow::Private {
 	std::set<QString> feat;
+	std::map<QString, FileItemList> filesmap;
+	QString current_path;
 };
 
 MainWindow::MainWindow(QWidget *parent)
@@ -190,21 +200,32 @@ public:
 
 ftp_ptr MainWindow::connectFTP()
 {
+	QString server = "ftp.jaist.ac.jp";
 	ftp_ptr ftp = ftp_ptr(new ftplib);
-	ftp->connect("ftp.jaist.ac.jp");
+	ftp->connect(server.toStdString().c_str());
 	ftp->login("anonymous", "foo@example.com");
+
+	updateFeature(ftp);
+
+	if (ui->treeWidget->topLevelItemCount() == 0) {
+		ui->treeWidget->clear();
+		QTreeWidgetItem *item = new QTreeWidgetItem();
+		item->setText(0, server);
+		ui->treeWidget->addTopLevelItem(item);
+	}
+
 	return ftp;
 }
 
-void MainWindow::updateFeature()
+void MainWindow::updateFeature(ftp_ptr ftp)
 {
 	m->feat.clear();
 
 	QBuffer b;
 	if (b.open(QBuffer::WriteOnly)) {
-		ftp_ptr ftp = connectFTP();
+//		ftp_ptr ftp = connectFTP();
 		ftp->feat(&b);
-		ftp->quit();
+//		ftp->quit();
 	}
 	QStringList lines = splitLines(b.buffer(), [](char const *ptr, size_t len){
 		return QString::fromUtf8(ptr, len).trimmed();
@@ -228,19 +249,18 @@ bool MainWindow::queryFeatureAvailable(QString const &name)
 	return it != m->feat.end();
 }
 
-void MainWindow::fetchList()
+void MainWindow::fetchList(QString const &path)
 {
-	updateFeature();
-
 	bool mlsd = queryFeatureAvailable("MLST") || queryFeatureAvailable("MLSD");
 
 	QBuffer b;
 	if (b.open(QBuffer::WriteOnly)) {
 		ftp_ptr ftp = connectFTP();
+		std::string d = path.toStdString();
 		if (mlsd) {
-			ftp->mlsd(&b, "/");
+			ftp->mlsd(&b, d.c_str());
 		} else {
-			ftp->dir(&b, "/");
+			ftp->dir(&b, d.c_str());
 		}
 		ftp->quit();
 	}
@@ -274,7 +294,7 @@ void MainWindow::fetchList()
 							if (*p == ' ') {
 								item.name = p + 1;
 							}
-							if (!item.name.isEmpty() && item.name != ".") {
+							if (!item.name.isEmpty() && item.name != "." && item.name != "..") {
 								for (int i = 0; i < n; i++) {
 									char const *k = list[i].c_str();
 									char const *eq = strchr(k, '=');
@@ -316,9 +336,9 @@ void MainWindow::fetchList()
 		});
 		for (int row = 0; row < lines.size(); row++) {
 			QString const &line = lines[row];
-			FileItem t;
-			if (t.parseList(line)) {
-				files.push_back(t);
+			FileItem item;
+			if (item.parseList(line) && item.name != "." && item.name != "..") {
+				files.push_back(item);
 			}
 		}
 	}
@@ -329,6 +349,56 @@ void MainWindow::fetchList()
 		return a.name.compare(b.name, Qt::CaseInsensitive) < 0;
 	});
 
+	m->filesmap[path] = files;
+	updateFilesView(path);
+	updateTreeView(path);
+}
+
+void MainWindow::updateTreeView(QString const &path)
+{
+	QStringList list;
+	if (path.isEmpty() || path == "/") {
+		list.push_back("/");
+	} else {
+		if (path.utf16()[0] != '/') return;
+		list = path.split('/');
+		list[0] = "/";
+	}
+
+	QTreeWidgetItem *item = ui->treeWidget->topLevelItem(0);
+	if (!item) return;
+
+	QString s;
+
+	for (int i = 0; i < list.size(); i++) {
+		item->setExpanded(true);
+		for (int j = 0; j < item->childCount(); j++) {
+			QTreeWidgetItem *child = item->child(j);
+			if (child->text(0) == list[i]) {
+				item = child;
+				goto next;
+			}
+		}
+		QTreeWidgetItem *newitem = new QTreeWidgetItem();
+		newitem->setText(0, list[i]);
+		newitem->setData(0, Item_Path, s / list[i]);
+		item->addChild(newitem);
+		item = newitem;
+next:;
+		s = s / list[i];
+	}
+
+	ui->treeWidget->blockSignals(true);
+	ui->treeWidget->setCurrentItem(item);
+	ui->treeWidget->blockSignals(false);
+}
+
+void MainWindow::updateFilesView(QString const &path)
+{
+	auto it = m->filesmap.find(path);
+	if (it == m->filesmap.end()) return;
+
+	FileItemList const &files = it->second;
 
 	QStringList cols = {
 		tr("Name"),
@@ -340,21 +410,21 @@ void MainWindow::fetchList()
 	};
 
 
-	ui->tableWidget_remote->clear();
-	ui->tableWidget_remote->setColumnCount(cols.size());
-	ui->tableWidget_remote->setRowCount(files.size());
-	ui->tableWidget_remote->setShowGrid(false);
-	ui->tableWidget_remote->horizontalHeader()->setStretchLastSection(true);
-	ui->tableWidget_remote->verticalHeader()->setVisible(false);
+	ui->tableWidget->clear();
+	ui->tableWidget->setColumnCount(cols.size());
+	ui->tableWidget->setRowCount(files.size());
+	ui->tableWidget->setShowGrid(false);
+	ui->tableWidget->horizontalHeader()->setStretchLastSection(true);
+	ui->tableWidget->verticalHeader()->setVisible(false);
 
 	for (int col = 0; col < cols.size(); col++) {
 		QTableWidgetItem *item = new QTableWidgetItem();
 		item->setText(cols[col]);
-		ui->tableWidget_remote->setHorizontalHeaderItem(col, item);
+		ui->tableWidget->setHorizontalHeaderItem(col, item);
 	}
 
 	for (int row = 0; row < files.size(); row++) {
-		ui->tableWidget_remote->setRowHeight(row, 20);
+		ui->tableWidget->setRowHeight(row, 20);
 		FileItem const &t = files[row];
 		int col = 0;
 		auto AddColumn = [&](QString const &text, bool alignright){
@@ -363,7 +433,10 @@ void MainWindow::fetchList()
 			if (alignright) {
 				item->setTextAlignment(Qt::AlignRight);
 			}
-			ui->tableWidget_remote->setItem(row, col, item);
+			if (col == 0) {
+				item->setData(Item_Path, path / text);
+			}
+			ui->tableWidget->setItem(row, col, item);
 			col++;
 		};
 		AddColumn(t.name, false);
@@ -373,10 +446,42 @@ void MainWindow::fetchList()
 		AddColumn(t.attrString(), false);
 		AddColumn(t.owner, false);
 	}
-	ui->tableWidget_remote->resizeColumnsToContents();
+	ui->tableWidget->resizeColumnsToContents();
+}
+
+void MainWindow::changeDir(QString const path)
+{
+	m->current_path = path;
+	if (path.startsWith('/')) {
+		auto it = m->filesmap.find(path);
+		if (it == m->filesmap.end()) {
+			fetchList(path);
+		} else {
+			updateFilesView(path);
+			updateTreeView(path);
+		}
+	}
 }
 
 void MainWindow::on_pushButton_clicked()
 {
-	fetchList();
+	fetchList("/");
+}
+
+void MainWindow::on_tableWidget_itemDoubleClicked(QTableWidgetItem *)
+{
+	int row = ui->tableWidget->currentRow();
+	QTableWidgetItem *item = ui->tableWidget->item(row, 0);
+	if (!item) return;
+	QString path = item->data(Item_Path).toString();
+	fetchList(path);
+}
+
+void MainWindow::on_treeWidget_currentItemChanged(QTreeWidgetItem *current, QTreeWidgetItem *previous)
+{
+	if (!current) return;
+
+	QString path = current->data(0, Item_Path).toString();
+	qDebug() << path;
+	changeDir(path);
 }
