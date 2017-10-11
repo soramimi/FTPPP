@@ -42,6 +42,11 @@ private slots:
 	void on_tableWidget_itemDoubleClicked(QTableWidgetItem *item);
 	void on_treeWidget_currentItemChanged(QTreeWidgetItem *current, QTreeWidgetItem *previous);
 	void on_treeWidget_itemExpanded(QTreeWidgetItem *item);
+	void on_action_settings_triggered();
+
+	// QWidget interface
+protected:
+	void closeEvent(QCloseEvent *event);
 };
 
 #endif // MAINWINDOW_H

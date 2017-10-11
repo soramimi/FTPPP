@@ -6,9 +6,12 @@
 #include <QDebug>
 #include <QFileInfo>
 #include <set>
+#include "MySettings.h"
+#include "SettingsDialog.h"
 #include "joinpath.h"
 
 
+extern bool start_with_shift_key;
 
 
 class FileItem;
@@ -32,6 +35,21 @@ MainWindow::MainWindow(QWidget *parent)
 {
 	ui->setupUi(this);
 	ui->splitter->setSizes({100,300});
+
+	if (!start_with_shift_key) {
+		Qt::WindowStates state = windowState();
+		MySettings settings;
+
+		settings.beginGroup("MainWindow");
+		bool maximized = settings.value("Maximized").toBool();
+		restoreGeometry(settings.value("Geometry").toByteArray());
+		ui->splitter->restoreState(settings.value("SplitterState").toByteArray());
+		settings.endGroup();
+		if (maximized) {
+			state |= Qt::WindowMaximized;
+			setWindowState(state);
+		}
+	}
 }
 
 MainWindow::~MainWindow()
@@ -538,3 +556,32 @@ void MainWindow::on_pushButton_clicked()
 	}
 }
 
+
+void MainWindow::on_action_settings_triggered()
+{
+	SettingsDialog dlg(this);
+	if (dlg.exec() == QDialog::Accepted) {
+
+	}
+}
+
+void MainWindow::closeEvent(QCloseEvent *event)
+{
+	setWindowOpacity(0);
+	Qt::WindowStates state = windowState();
+	bool maximized = (state & Qt::WindowMaximized) != 0;
+	if (maximized) {
+		state &= ~Qt::WindowMaximized;
+		setWindowState(state);
+	}
+	{
+		MySettings settings;
+
+		settings.beginGroup("MainWindow");
+		settings.setValue("Maximized", maximized);
+		settings.setValue("Geometry", saveGeometry());
+		settings.setValue("SplitterState", ui->splitter->saveState());
+		settings.endGroup();
+	}
+	QMainWindow::closeEvent(event);
+}
