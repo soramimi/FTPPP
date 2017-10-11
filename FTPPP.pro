@@ -20,10 +20,12 @@ win32:LIBS += -LC:\openssl\lib -llibeay32 -lssleay32 -lws2_32
 SOURCES += src/main.cpp\
 		src/MainWindow.cpp \
 		src/ftplib.cpp \
-    src/joinpath.cpp
+    src/joinpath.cpp \
+    src/LegacyWindowsStyleTreeControl.cpp
 
 HEADERS  += src/MainWindow.h \
 		src/ftplib.h \
-    src/joinpath.h
+    src/joinpath.h \
+    src/LegacyWindowsStyleTreeControl.h
 
 FORMS    += src/MainWindow.ui

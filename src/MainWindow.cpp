@@ -349,12 +349,19 @@ void MainWindow::fetchList(QString const &path)
 		return a.name.compare(b.name, Qt::CaseInsensitive) < 0;
 	});
 
+	QStringList subdirs;
+	for (FileItem const &item : files) {
+		if (item.isdir) {
+			subdirs.push_back(item.name);
+		}
+	}
+
 	m->filesmap[path] = files;
 	updateFilesView(path);
-	updateTreeView(path);
+	updateTreeView(path, &subdirs);
 }
 
-void MainWindow::updateTreeView(QString const &path)
+void MainWindow::updateTreeView(QString const &path, QStringList const *children)
 {
 	QStringList list;
 	if (path.isEmpty() || path == "/") {
@@ -376,6 +383,12 @@ void MainWindow::updateTreeView(QString const &path)
 			QTreeWidgetItem *child = item->child(j);
 			if (child->text(0) == list[i]) {
 				item = child;
+				if (item->childCount() == 1) {
+					child = item->child(0);
+					if (child->text(0).isEmpty()) {
+						item->removeChild(child);
+					}
+				}
 				goto next;
 			}
 		}
@@ -386,6 +399,17 @@ void MainWindow::updateTreeView(QString const &path)
 		item = newitem;
 next:;
 		s = s / list[i];
+	}
+
+	if (children) {
+		for (QString const &subdir : *children) {
+			QTreeWidgetItem *newitem = new QTreeWidgetItem();
+			newitem->setText(0, subdir);
+			newitem->setData(0, Item_Path, s / subdir);
+			QTreeWidgetItem *dummyitem = new QTreeWidgetItem();
+			newitem->addChild(dummyitem);
+			item->addChild(newitem);
+		}
 	}
 
 	ui->treeWidget->blockSignals(true);
@@ -458,7 +482,7 @@ void MainWindow::changeDir(QString const path)
 			fetchList(path);
 		} else {
 			updateFilesView(path);
-			updateTreeView(path);
+			updateTreeView(path, nullptr);
 		}
 	}
 }
@@ -484,4 +508,12 @@ void MainWindow::on_treeWidget_currentItemChanged(QTreeWidgetItem *current, QTre
 	QString path = current->data(0, Item_Path).toString();
 	qDebug() << path;
 	changeDir(path);
+}
+
+void MainWindow::on_treeWidget_itemExpanded(QTreeWidgetItem *item)
+{
+	if (item && item->isExpanded()) {
+		QString path = item->data(0, Item_Path).toString();
+		changeDir(path);
+	}
 }
