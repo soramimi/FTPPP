@@ -6,6 +6,7 @@
 #include <QDebug>
 #include <QFileInfo>
 #include <set>
+#include <QFileIconProvider>
 #include "MySettings.h"
 #include "SettingsDialog.h"
 #include "joinpath.h"
@@ -28,6 +29,7 @@ struct MainWindow::Private {
 	std::map<QString, FileItemList> filesmap;
 	QString current_path;
 	FTP ftp;
+	QFileIconProvider icon_provider;
 };
 
 MainWindow::MainWindow(QWidget *parent)
@@ -415,6 +417,7 @@ void MainWindow::updateTreeView(QString const &path, QStringList const *children
 			QTreeWidgetItem *newitem = new QTreeWidgetItem();
 			newitem->setText(0, list[i]);
 			newitem->setData(0, Item_Path, s / list[i]);
+			newitem->setIcon(0, m->icon_provider.icon(QFileIconProvider::Folder));
 			item->addChild(newitem);
 			item = newitem;
 		}
@@ -427,6 +430,7 @@ next:;
 			QTreeWidgetItem *newitem = new QTreeWidgetItem();
 			newitem->setText(0, subdir);
 			newitem->setData(0, Item_Path, s / subdir);
+			newitem->setIcon(0, m->icon_provider.icon(QFileIconProvider::Folder));
 			QTreeWidgetItem *dummyitem = new QTreeWidgetItem();
 			newitem->addChild(dummyitem);
 			item->addChild(newitem);
@@ -483,8 +487,15 @@ void MainWindow::updateFilesView(QString const &path)
 			}
 			ui->tableWidget_remote->setItem(row, col, item);
 			col++;
+			return item;
 		};
-		AddColumn(t.name, false);
+		QFileInfo info(t.name);
+		QTableWidgetItem *item = AddColumn(t.name, false);
+		if (t.isdir) {
+			item->setIcon(m->icon_provider.icon(QFileIconProvider::Folder));
+		} else {
+			item->setIcon(m->icon_provider.icon(QFileIconProvider::File));
+		}
 		AddColumn(t.datetimeString(), false);
 		AddColumn(t.isdir ? QString::fromLatin1("<DIR>") : QString::number(t.size), true);
 		AddColumn(t.typeString(), false);
