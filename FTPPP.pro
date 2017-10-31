@@ -6,6 +6,9 @@
 
 QT       += core gui widgets
 
+win32:QT += winextras
+
+
 TARGET = FTPPP
 TEMPLATE = app
 
@@ -27,7 +30,8 @@ SOURCES += src/main.cpp\
     src/FTP.cpp \
     src/AbstractSettingForm.cpp \
     src/SettingsDialog.cpp \
-    src/MySettings.cpp
+    src/MySettings.cpp \
+    src/WinIcon.cpp
 
 HEADERS  += src/MainWindow.h \
 		src/ftplib.h \
@@ -37,7 +41,8 @@ HEADERS  += src/MainWindow.h \
     src/AbstractSettingForm.h \
     src/SettingsDialog.h \
     src/main.h \
-    src/MySettings.h
+    src/MySettings.h \
+    src/WinIcon.h
 
 FORMS    += src/MainWindow.ui \
     src/SettingsDialog.ui

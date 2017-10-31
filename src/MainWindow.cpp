@@ -11,6 +11,9 @@
 #include "SettingsDialog.h"
 #include "joinpath.h"
 
+#ifdef Q_OS_WIN
+#include "WinIcon.h"
+#endif
 
 extern bool start_with_shift_key;
 
@@ -489,12 +492,19 @@ void MainWindow::updateFilesView(QString const &path)
 			col++;
 			return item;
 		};
-		QFileInfo info(t.name);
 		QTableWidgetItem *item = AddColumn(t.name, false);
 		if (t.isdir) {
 			item->setIcon(m->icon_provider.icon(QFileIconProvider::Folder));
 		} else {
-			item->setIcon(m->icon_provider.icon(QFileIconProvider::File));
+			QIcon icon;
+#ifdef Q_OS_WIN
+			QFileInfo info(t.name);
+			icon = WinIcon::iconFromExtensionLarge(info.suffix());
+#endif
+			if (icon.isNull()) {
+				icon = m->icon_provider.icon(QFileIconProvider::File);
+			}
+			item->setIcon(icon);
 		}
 		AddColumn(t.datetimeString(), false);
 		AddColumn(t.isdir ? QString::fromLatin1("<DIR>") : QString::number(t.size), true);
@@ -547,9 +557,13 @@ void MainWindow::on_treeWidget_remote_itemExpanded(QTreeWidgetItem *item)
 
 bool MainWindow::connect_()
 {
+#if 0
 	QString server = "ftp.jaist.ac.jp";
 	QString user = "anonymous";
 	QString pass = "who@example.com";
+#else
+#include "testserver.txt"
+#endif
 
 	ftp().close();
 
