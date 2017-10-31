@@ -23,14 +23,14 @@ private:
 	struct Private;
 	Private *m;
 
-	void fetchList(const QString &path);
+	void fetchList(const QString &path, bool expand_tree);
 
 	bool queryFeatureAvailable(const QString &name);
 	void updateFeature();
 	bool connect_();
 	void updateFilesView(const QString &path);
-	void updateTreeView(const QString &path, const QStringList *children);
-	void changeDir(const QString path);
+	void updateTreeView(const QString &path, const QStringList *children, bool expand_tree);
+	void changeDir(const QString path, bool expand_tree);
 	FTP &ftp();
 public:
 	explicit MainWindow(QWidget *parent = 0);

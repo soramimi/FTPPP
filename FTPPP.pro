@@ -46,3 +46,5 @@ HEADERS  += src/MainWindow.h \
 
 FORMS    += src/MainWindow.ui \
     src/SettingsDialog.ui
+
+win32:LIBS += -lshell32 -luser32

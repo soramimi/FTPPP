@@ -7,6 +7,7 @@
 #include <QFileInfo>
 #include <set>
 #include <QFileIconProvider>
+#include <QTimer>
 #include "MySettings.h"
 #include "SettingsDialog.h"
 #include "joinpath.h"
@@ -33,6 +34,8 @@ struct MainWindow::Private {
 	QString current_path;
 	FTP ftp;
 	QFileIconProvider icon_provider;
+	QTime open_tree_delay;
+
 };
 
 MainWindow::MainWindow(QWidget *parent)
@@ -266,7 +269,7 @@ bool MainWindow::queryFeatureAvailable(QString const &name)
 	return it != m->feat.end();
 }
 
-void MainWindow::fetchList(QString const &path)
+void MainWindow::fetchList(QString const &path, bool expand_tree)
 {
 	bool mlsd = queryFeatureAvailable("MLST") || queryFeatureAvailable("MLSD");
 
@@ -382,10 +385,10 @@ void MainWindow::fetchList(QString const &path)
 
 	m->filesmap[path] = files;
 	updateFilesView(path);
-	updateTreeView(path, &subdirs);
+	updateTreeView(path, &subdirs, expand_tree);
 }
 
-void MainWindow::updateTreeView(QString const &path, QStringList const *children)
+void MainWindow::updateTreeView(QString const &path, QStringList const *children, bool expand_tree)
 {
 	QStringList list;
 	if (path.isEmpty() || path == "/") {
@@ -442,7 +445,9 @@ next:;
 
 	ui->treeWidget_remote->blockSignals(true);
 	ui->treeWidget_remote->setCurrentItem(item);
-	item->setExpanded(true);
+	if (expand_tree) {
+		item->setExpanded(true);
+	}
 	ui->treeWidget_remote->blockSignals(false);
 }
 
@@ -515,16 +520,16 @@ void MainWindow::updateFilesView(QString const &path)
 	ui->tableWidget_remote->resizeColumnsToContents();
 }
 
-void MainWindow::changeDir(QString const path)
+void MainWindow::changeDir(QString const path, bool expand_tree)
 {
 	m->current_path = path;
 	if (path.startsWith('/')) {
 		auto it = m->filesmap.find(path);
 		if (it == m->filesmap.end()) {
-			fetchList(path);
+			fetchList(path, expand_tree);
 		} else {
 			updateFilesView(path);
-			updateTreeView(path, nullptr);
+			updateTreeView(path, nullptr, expand_tree);
 		}
 	}
 }
@@ -535,23 +540,19 @@ void MainWindow::on_tableWidget_remote_itemDoubleClicked(QTableWidgetItem *)
 	QTableWidgetItem *item = ui->tableWidget_remote->item(row, 0);
 	if (!item) return;
 	QString path = item->data(Item_Path).toString();
-	fetchList(path);
+	fetchList(path, true);
 }
 
 void MainWindow::on_treeWidget_remote_currentItemChanged(QTreeWidgetItem *current, QTreeWidgetItem *previous)
 {
-	if (!current) return;
-
-	QString path = current->data(0, Item_Path).toString();
-	qDebug() << path;
-	changeDir(path);
+	m->open_tree_delay = QTime::currentTime().addMSecs(300);
 }
 
 void MainWindow::on_treeWidget_remote_itemExpanded(QTreeWidgetItem *item)
 {
 	if (item && item->isExpanded()) {
 		QString path = item->data(0, Item_Path).toString();
-		changeDir(path);
+		changeDir(path, false);
 	}
 }
 
@@ -584,7 +585,7 @@ bool MainWindow::connect_()
 void MainWindow::on_pushButton_clicked()
 {
 	if (connect_()) {
-		fetchList("/");
+		fetchList("/", true);
 	}
 }
 
@@ -628,6 +629,18 @@ void MainWindow::timerEvent(QTimerEvent *event)
 		if (m->ftp_refresh_counter >= 30) {
 			m->ftp_refresh_counter = 0;
 			ftp().pwd();
+		}
+	}
+
+	QTime current_time = QTime::currentTime();
+
+	if (m->open_tree_delay.isValid() && m->open_tree_delay.msecsTo(current_time) >= 0) {
+		m->open_tree_delay = QTime();
+		QTreeWidgetItem *current = ui->treeWidget_remote->currentItem();
+		if (current) {
+			QString path = current->data(0, Item_Path).toString();
+			qDebug() << path;
+			changeDir(path, false);
 		}
 	}
 }
